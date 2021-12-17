@@ -144,6 +144,8 @@ where
                 parent_id: Some(parent_id.into_u64().to_string()),
                 culprit: Some(metadata.target().to_string()),
                 exception: visitor.0.get("backtrace").and_then(|backtrace| {
+                    // Parsing frames is not trivial so for now we store the backtrace as a vector of frames.
+                    // Will tackle parsing in subsequent PR's.
                     let frames: Vec<String> =
                         serde_json::from_str(backtrace.as_str()?).ok()?;
 
@@ -289,6 +291,8 @@ impl ApmLayer {
         let mut metadata = self.metadata.clone();
 
         if !visitor.0.is_empty() {
+            // We remove the backtrace field because it's size too big for elastic.
+            // Later we add it back so that we don't change the visitors state.
             let backtrace = visitor.0.remove("backtrace");
             metadata["labels"] = json!(visitor.0);
             metadata["labels"]["level"] = json!(meta.level().to_string());
