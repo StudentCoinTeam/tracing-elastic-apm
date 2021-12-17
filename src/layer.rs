@@ -12,7 +12,7 @@ use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 use crate::{
     apm_client::{ApmClient, Batch},
     config::Config,
-    model::{Agent, Error, Log, Metadata, Service, Span, Transaction},
+    model::{Agent, Error, Exception, Log, Metadata, Service, Span, StackTrace, Transaction},
     visitor::{ApmVisitor, TraceIdVisitor},
 };
 
@@ -143,6 +143,23 @@ where
                 trace_id: Some(trace_ctx.trace_id.to_string()),
                 parent_id: Some(parent_id.into_u64().to_string()),
                 culprit: Some(metadata.target().to_string()),
+                exception: visitor.0.get("backtrace").and_then(|backtrace| {
+                    let frames: Vec<String> =
+                        serde_json::from_str(backtrace.as_str()?).ok()?;
+
+                    Some(Exception {
+                        stacktrace: Some(
+                            frames
+                                .into_iter()
+                                .map(|frame| StackTrace { filename: frame })
+                                .collect(),
+                        ),
+                        message: visitor.0.get("message").map(|message| message.to_string()),
+                        handled: Some(false),
+                        exception_type: Some("Panic".to_string()),
+                        ..Default::default()
+                    })
+                }),
                 log: Some(Log {
                     level: Some(metadata.level().to_string()),
                     message: visitor
@@ -155,7 +172,7 @@ where
                 ..Default::default()
             };
 
-            let metadata = self.create_metadata(&visitor, metadata);
+            let metadata = self.create_metadata(&mut visitor, metadata);
             let batch = Batch::new(metadata, None, None, Some(json!(error)));
             self.client.send_batch(batch);
         }
@@ -187,14 +204,14 @@ where
     fn on_close(&self, id: Id, ctx: Context<'_, S>) {
         let span = ctx.span(&id).expect("Span not found!");
         let mut extensions = span.extensions_mut();
-        let visitor = extensions
+        let mut visitor = extensions
             .remove::<ApmVisitor>()
             .expect("Visitor not found!");
         let span_ctx = extensions
             .remove::<SpanContext>()
             .expect("Span context not found!");
 
-        let metadata = self.create_metadata(&visitor, span.metadata());
+        let metadata = self.create_metadata(&mut visitor, span.metadata());
         let duration = span_ctx.duration.as_micros() as f32 / 1000.;
 
         let batch = if let Some(mut span) = extensions.remove::<Span>() {
@@ -266,15 +283,20 @@ impl ApmLayer {
 
     fn create_metadata(
         &self,
-        visitor: &ApmVisitor,
+        visitor: &mut ApmVisitor,
         meta: &'static tracing::Metadata<'static>,
     ) -> Value {
         let mut metadata = self.metadata.clone();
 
         if !visitor.0.is_empty() {
+            let backtrace = visitor.0.remove("backtrace");
             metadata["labels"] = json!(visitor.0);
             metadata["labels"]["level"] = json!(meta.level().to_string());
             metadata["labels"]["target"] = json!(meta.target().to_string());
+
+            if let Some(backtrace) = backtrace {
+                visitor.0.insert("backtrace".to_string(), backtrace);
+            }  
         }
 
         metadata
