@@ -354,6 +354,11 @@ pub(crate) struct Log {
 }
 
 #[derive(Default, Serialize, Debug)]
+pub(crate) struct StackTrace {
+    pub filename: String,
+}
+
+#[derive(Default, Serialize, Debug)]
 pub(crate) struct Exception {
     pub code: Option<String>,
     pub message: Option<String>,
@@ -361,6 +366,7 @@ pub(crate) struct Exception {
     #[serde(rename = "type")]
     pub exception_type: Option<String>,
     pub handled: Option<bool>,
+    pub stacktrace: Option<Vec<StackTrace>>,
 }
 
 #[derive(Default, Serialize, Debug)]
