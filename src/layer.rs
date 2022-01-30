@@ -118,9 +118,6 @@ where
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
         let metadata = event.metadata();
-        if metadata.level() != &Level::ERROR {
-            return;
-        }
 
         let parent_id = if let Some(parent_id) = event.parent() {
             // explicit parent
@@ -143,6 +140,12 @@ where
                 .get::<TraceContext>()
                 .expect("Trace context not found!");
 
+            let mut visitor = TraceIdVisitor::default();
+            event.record(&mut visitor);
+
+            if metadata.level() != &Level::ERROR {
+                return;
+            }
             let mut visitor = ApmVisitor::default();
             event.record(&mut visitor);
 
