@@ -106,6 +106,11 @@ where
             .get_mut::<ApmVisitor>()
             .expect("Visitor not found!");
         values.record(visitor);
+
+        let visitor = extensions
+            .get_mut::<TraceIdVisitor>()
+            .expect("Visitor not found!");
+        values.record(visitor);
     }
 
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
@@ -146,8 +151,7 @@ where
                 exception: visitor.0.get("backtrace").and_then(|backtrace| {
                     // Parsing frames is not trivial so for now we store the backtrace as a vector of frames.
                     // Will tackle parsing in subsequent PR's.
-                    let frames: Vec<String> =
-                        serde_json::from_str(backtrace.as_str()?).ok()?;
+                    let frames: Vec<String> = serde_json::from_str(backtrace.as_str()?).ok()?;
 
                     Some(Exception {
                         stacktrace: Some(
@@ -300,7 +304,7 @@ impl ApmLayer {
 
             if let Some(backtrace) = backtrace {
                 visitor.0.insert("backtrace".to_string(), backtrace);
-            }  
+            }
         }
 
         metadata
