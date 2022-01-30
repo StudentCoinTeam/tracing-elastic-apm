@@ -49,6 +49,9 @@ where
         let mut visitor = ApmVisitor::default();
         attrs.record(&mut visitor);
 
+        let mut trace_id_visitor = TraceIdVisitor::default();
+        attrs.record(&mut trace_id_visitor);
+
         extensions.insert(visitor);
         extensions.insert(SpanContext {
             duration: Duration::new(0, 0),
